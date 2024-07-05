@@ -43,13 +43,13 @@ def get_link_to_subscribe(link):
 #     return kb
 
 
-# def get_cancel_keyboard() -> ReplyKeyboardMarkup:
-#     kb = ReplyKeyboardMarkup(resize_keyboard=True)
-#     kb.add(
-#         KeyboardButton('Отмена'),
-#     )
+def get_cancel_keyboard() -> ReplyKeyboardMarkup:
+    kb = ReplyKeyboardMarkup(resize_keyboard=True)
+    kb.add(
+        KeyboardButton('Отмена'),
+    )
 
-#     return kb
+    return kb
 
 
 # def get_done_keyboard() -> ReplyKeyboardMarkup:

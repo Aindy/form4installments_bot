@@ -3,7 +3,7 @@ from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.dispatcher.filters.state import StatesGroup, State
 from aiogram.dispatcher import FSMContext
 from aiogram.types import  InlineKeyboardButton, InlineKeyboardMarkup
-from aiogram.dispatcher.filters import BoundFilter
+from aiogram.dispatcher.filters import BoundFilter, Text
 from aiogram.types import ChatActions
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
@@ -99,8 +99,34 @@ class IsSubscriber(BoundFilter):
 dp.filters_factory.bind(IsSubscriber)
 
 
+# Создание пользовательского фильтра для типа чата
+class ChatTypeFilter(BoundFilter):
+    key = 'chat_type'
+
+    def __init__(self, chat_type):
+        if not isinstance(chat_type, list):
+            chat_type = [chat_type]
+        self.chat_type = chat_type
+
+    async def check(self, message: types.Message) -> bool:
+        return message.chat.type in self.chat_type
+
+# Регистрация фильтра
+dp.filters_factory.bind(ChatTypeFilter)
+
+
+@dp.message_handler(Text(equals="Отмена"), state='*', chat_type=types.ChatType.PRIVATE)
+async def save_contact_handler(message: types.Message, state: FSMContext) -> None:
+    """
+    Отменяет процесс заполнения заявки
+    """
+    await state.finish()
+    await message.reply(text='Вы отменили заявку.\nЧтобы начать заново нажмите /ready',
+                        reply_markup=types.ReplyKeyboardRemove())
+
+
 # Стартовое сообщение
-@dp.message_handler(commands='start')
+@dp.message_handler(commands='start', chat_type=types.ChatType.PRIVATE)
 async def send_welcome(message: types.Message):
     await message.bot.send_chat_action(message.chat.id, ChatActions.TYPING)
     await asyncio.sleep(1)
@@ -109,7 +135,7 @@ async def send_welcome(message: types.Message):
                         reply_markup=kb.get_link_to_subscribe(LINK_TO_GROUP))
 
 
-@dp.message_handler(IsSubscriber(), commands='ready')
+@dp.message_handler(IsSubscriber(), commands='ready', chat_type=types.ChatType.PRIVATE)
 async def apply_for_installment(message: types.Message):
     await sq.create_profile(user_id=message.from_user.id)
     await message.bot.send_chat_action(message.chat.id, ChatActions.TYPING)
@@ -137,10 +163,11 @@ async def apply_for_installment(message: types.Message):
             await message.bot.send_chat_action(message.chat.id, ChatActions.TYPING)
             await Form.name.set()
             await asyncio.sleep(1)
-            await message.reply("Пожалуйста, введите ваше имя:")
+            await message.reply(text="Пожалуйста, введите ваше имя:",
+                                reply_markup=kb.get_cancel_keyboard())
 
 
-@dp.message_handler(IsSubscriber(), commands='reset')
+@dp.message_handler(IsSubscriber(), commands='reset', chat_type=types.ChatType.PRIVATE)
 async def apply_for_installment(message: types.Message):
     await sq.create_profile(user_id=message.from_user.id)
     await message.bot.send_chat_action(message.chat.id, ChatActions.TYPING)
@@ -154,7 +181,8 @@ async def apply_for_installment(message: types.Message):
             await message.bot.send_chat_action(message.chat.id, ChatActions.TYPING)
             await Form.name.set()
             await asyncio.sleep(1)
-            await message.reply("Пожалуйста, введите ваше имя:")
+            await message.reply(text="Пожалуйста, введите ваше имя:",
+                                reply_markup=kb.get_cancel_keyboard())
 
 
 # Получаем имя пользователя и переходим к следующему состоянию
@@ -251,7 +279,10 @@ async def save_contact_handler(message: types.Message, state: FSMContext) -> Non
         await Form.next()
         await message.bot.send_chat_action(message.chat.id, ChatActions.TYPING)
         await asyncio.sleep(1)
-        await message.reply("Загрузите сканы паспорта (обе стороны с фото и пропиской.\nОтправьте поочередно, максимум 2 фотографии:):")    
+        await message.reply(text="Загрузите сканы паспорта (обе стороны с фото и пропиской.\nОтправьте поочередно, максимум 2 фотографии:):",
+                            reply_markup=kb.get_cancel_keyboard())
+
+
 
 
 # Получаем сканы паспорта поручителя и переходим к следующему состоянию после получения двух фотографий
@@ -438,7 +469,8 @@ async def process_confirm(callback_query: types.CallbackQuery, state: FSMContext
     data = await state.get_data()
     await sq.update_profile(data, callback_query.from_user.id)
     await send_profile_to_moderation(data, ADMIN_GROUP, callback_query.bot, callback_query.from_user.id)
-    await callback_query.message.answer("Ваша заявка отправлена на рассмотрение.")
+    await callback_query.message.answer(text="Ваша заявка отправлена на рассмотрение.",
+                                        reply_markup=types.ReplyKeyboardRemove())
     await state.finish()
 
 
