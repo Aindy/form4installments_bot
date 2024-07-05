@@ -64,15 +64,6 @@ async def update_profile(data, user_id):
             if status_check is not None:
                 await db.execute("""
                 UPDATE profile SET
-                status_check = ?,
-                status_check_timestamp = datetime('now')
-                WHERE user_id = ?""", (
-                    status_check,
-                    user_id
-                ))
-            else:
-                await db.execute("""
-                UPDATE profile SET
                 name = ?, 
                 surname = ?, 
                 middle_name = ?, 
@@ -90,6 +81,8 @@ async def update_profile(data, user_id):
                 product_choice = ?, 
                 cost_product = ?, 
                 installment_terms = ?,
+                status_check = ?,
+                status_check_timestamp = datetime('now'),
                 timestamp = datetime('now')
                 WHERE user_id = ?""", (
                     str(data['name']),
@@ -109,6 +102,7 @@ async def update_profile(data, user_id):
                     str(data['product_choice']),
                     str(data['cost_product']),
                     str(data['installment_terms']),
+                    int(data['status_check']),
                     user_id
                 ))
             await db.commit()
