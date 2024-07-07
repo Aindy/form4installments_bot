@@ -557,6 +557,42 @@ async def approve_callback_handler(query: types.CallbackQuery) -> None:
         text="✅ Заявка одобрена"
         )
     await bot.send_message(user_id, text='Вам одобрена рассрочка!')
+    user_data = await sq.get_status(user_id)
+
+    caption = (
+        f"Имя: {user_data[1]}\n"
+        f"Фамилия: {user_data[2]}\n"
+        f"Отчество: {user_data[3]}\n"
+        f"Город прописки: {user_data[4]}\n"
+        f"Город проживания: {user_data[5]}\n"
+        f"Телефон: {user_data[6]}\n"
+        f"Ежемесячный доход: {user_data[9]}\n"
+        f"Статус работы: {user_data[10]}\n"
+        f"Номер организации: {user_data[11]}\n"
+        f"Поручитель: {user_data[12]}\n\n"
+        f"Категория товара: {user_data[14]}\n"
+        f"Выбранный товар: {user_data[15]}\n"
+        f"Стоимость товара: {user_data[16]}\n"
+        f"Условия рассрочки: {user_data[17]}\n"
+    )
+
+    media = []
+
+    # Добавление сканов паспорта
+    for scan in user_data[7]:
+        media.append(types.InputMediaPhoto(scan))
+
+    # Добавление селфи с паспортом
+    media.append(types.InputMediaPhoto(user_data[8]))
+
+    # Добавление сканов паспорта поручителя
+    for scan in user_data[13][:-1]:
+        media.append(types.InputMediaPhoto(scan))
+
+    # Добавление последнего скана паспорта поручителя с описанием
+    media.append(types.InputMediaPhoto(user_data[13][-1], caption=caption))
+
+    await bot.send_media_group(ADMIN_GROUP, media=media)
 
 
 @dp.callback_query_handler(text_contains='reject')
