@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 from dotenv import load_dotenv
 import asyncio
 import logging
+import ast
 import sys
 import re
 from os import getenv
@@ -24,6 +25,7 @@ load_dotenv()
 
 TOKEN = getenv("BOT_TOKEN")
 ADMIN_GROUP = getenv("ADMIN_GROUP")
+APPROVE_GROUP = getenv("APPROVE_GROUP")
 # ADMIN_GROUP = ADMIN_GROUP.split(",") if ADMIN_GROUP else []
 SUB_GROUP = getenv("SUB_GROUP", "")
 # ADMIN_GROUP = ADMIN_GROUP.split(",") if ADMIN_GROUP else []
@@ -542,7 +544,6 @@ async def send_profile_to_moderation(profile, ADMIN_GROUP, bot, user_id) -> None
     await bot.send_message(ADMIN_GROUP, text='Выберите действие:', reply_markup=kb.get_inline_keyboard(user_id))
 
 
-
 @dp.callback_query_handler(text_contains='approve')
 async def approve_callback_handler(query: types.CallbackQuery) -> None:
     """
@@ -578,21 +579,44 @@ async def approve_callback_handler(query: types.CallbackQuery) -> None:
 
     media = []
 
-    # Добавление сканов паспорта
-    for scan in user_data[7]:
-        media.append(types.InputMediaPhoto(scan))
+    try:
+        # Преобразование строкового представления списка в список
+        passport_scans = ast.literal_eval(user_data[7])
+        selfie_with_passport = user_data[8]
+        guarantor_passport = ast.literal_eval(user_data[13])
 
-    # Добавление селфи с паспортом
-    media.append(types.InputMediaPhoto(user_data[8]))
+        # Проверка корректности идентификаторов файлов и добавление в media
+        for scan in passport_scans:
+            if isinstance(scan, str) and len(scan) > 0:
+                media.append(types.InputMediaPhoto(scan))
+            else:
+                logging.error(f"Invalid file identifier for passport scan: {scan}")
 
-    # Добавление сканов паспорта поручителя
-    for scan in user_data[13][:-1]:
-        media.append(types.InputMediaPhoto(scan))
+        if isinstance(selfie_with_passport, str) and len(selfie_with_passport) > 0:
+            media.append(types.InputMediaPhoto(selfie_with_passport))
+        else:
+            logging.error(f"Invalid file identifier for selfie with passport: {selfie_with_passport}")
 
-    # Добавление последнего скана паспорта поручителя с описанием
-    media.append(types.InputMediaPhoto(user_data[13][-1], caption=caption))
+        for scan in guarantor_passport[:-1]:
+            if isinstance(scan, str) and len(scan) > 0:
+                media.append(types.InputMediaPhoto(scan))
+            else:
+                logging.error(f"Invalid file identifier for guarantor passport scan: {scan}")
 
-    await bot.send_media_group(ADMIN_GROUP, media=media)
+        if isinstance(guarantor_passport[-1], str) and len(guarantor_passport[-1]) > 0:
+            media.append(types.InputMediaPhoto(guarantor_passport[-1], caption=caption))
+        else:
+            logging.error(f"Invalid file identifier for last guarantor passport scan: {guarantor_passport[-1]}")
+    except (SyntaxError, ValueError) as e:
+        logging.error(f"Error parsing file identifiers: {e}")
+
+    if media:
+        try:
+            await bot.send_media_group(APPROVE_GROUP, media=media)
+        except Exception as e:
+            logging.error(f"Error sending media group: {e}")
+    else:
+        logging.error("No valid media to send.")
 
 
 @dp.callback_query_handler(text_contains='reject')
