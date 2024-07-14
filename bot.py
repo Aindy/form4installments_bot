@@ -29,7 +29,7 @@ APPROVE_GROUP = getenv("APPROVE_GROUP")
 # ADMIN_GROUP = ADMIN_GROUP.split(",") if ADMIN_GROUP else []
 SUB_GROUP = getenv("SUB_GROUP", "")
 # ADMIN_GROUP = ADMIN_GROUP.split(",") if ADMIN_GROUP else []
-LINK_TO_GROUP = 'https://web.telegram.org/k/#-2233720705'
+LINK_TO_GROUP = 'https://t.me/+PCyo6UD0pJU1ZTRi'
 phone_number_pattern = re.compile(r'^\+?[1-9]\d{1,14}$')
 
 bot = Bot(TOKEN)
@@ -159,7 +159,7 @@ async def apply_for_installment(message: types.Message):
         elif status_check == 1:
             await message.reply(f'У вас уже есть одобренная рассрочка.\n\n'
                                 f'Товар: {user_data[14]}, {user_data[15]}\n'
-                                f'{user_data[17]}')
+                                f'от {user_data[19]}')
             await message.answer(f'Если хотите сформировать заявку заново нажмите /reset')
         else:
             await message.bot.send_chat_action(message.chat.id, ChatActions.TYPING)
@@ -330,18 +330,50 @@ async def process_monthly_income(message: types.Message, state: FSMContext):
     await Form.next()
     await message.bot.send_chat_action(message.chat.id, ChatActions.TYPING)
     await asyncio.sleep(1)
-    await message.reply("Вы официально работаете? (да/нет):")
+
+    markup = InlineKeyboardMarkup(row_width=2)
+    markup.add(InlineKeyboardButton("да", callback_data="yes"))
+    markup.add(InlineKeyboardButton("нет", callback_data="no"))
+    
+    await bot.send_message(
+        message.from_user.id,
+        f"Вы официально работаете?:",
+        reply_markup=markup
+    )
 
 
-# Получаем статус работы пользователя и переходим к следующему состоянию
-@dp.message_handler(state=Form.employment_status)
-async def process_employment_status(message: types.Message, state: FSMContext):
+@dp.callback_query_handler(lambda c: c.data == 'yes', state=Form.employment_status)
+async def process_confirm(callback_query: types.CallbackQuery, state: FSMContext):
+
+    await bot.delete_message(
+        chat_id=callback_query.message.chat.id, 
+        message_id=callback_query.message.message_id)
+
+    await callback_query.answer('Меню администратор')
     async with state.proxy() as data:
-        data['employment_status'] = message.text
+        data['employment_status'] = 'да'
+    await callback_query.answer('Ответ записан')
     await Form.next()
-    await message.bot.send_chat_action(message.chat.id, ChatActions.TYPING)
+    # await callback_query.bot.send_chat_action(callback_query.chat.id, ChatActions.TYPING)
     await asyncio.sleep(1)
-    await message.reply("Введите номер организации:")
+    await callback_query.message.answer("Введите номер организации:")
+
+
+@dp.callback_query_handler(lambda c: c.data == 'no', state=Form.employment_status)
+async def process_cancel(callback_query: types.CallbackQuery, state: FSMContext):
+
+    await bot.delete_message(
+        chat_id=callback_query.message.chat.id, 
+        message_id=callback_query.message.message_id)
+    
+    async with state.proxy() as data:
+        data['employment_status'] = 'нет'
+        data['organization_number'] = 'нет'
+    await callback_query.answer('Ответ записан')
+    await Form.guarantor_info.set()
+    # await callback_query.bot.send_chat_action(callback_query.chat.id, ChatActions.TYPING)
+    await asyncio.sleep(1)
+    await callback_query.message.answer("Введите данные поручителя (ФИО, номер телефона):")
 
 
 # Получаем номер организации пользователя и переходим к следующему состоянию
@@ -410,64 +442,82 @@ async def process_invalid_price(message: types.Message):
 async def process_price(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
         data['cost_product'] = int(message.text)
+        data['status_check'] = 0
+        data['installment_terms'] = 'Индивидуальный рассчет'
+
     await Form.next()
     await message.bot.send_chat_action(message.chat.id, ChatActions.TYPING)
     await asyncio.sleep(2)
-    await message.reply("Подождите немного, мы считаем…")
-    await asyncio.sleep(5)
-    await show_installment_options(message, state)
-    
 
-async def show_installment_options(message: types.Message, state: FSMContext):
-    async with state.proxy() as data:
-        price = data['cost_product']
-        initial_payment = price * 0.3
-        markup = InlineKeyboardMarkup(row_width=1)
-        options = []
-
-        for months in range(3, 13):
-            if months == 12 and price <= 100000:
-                continue
-            monthly_payment = ((price - initial_payment) * (1 + 0.05 * months)) / months
-            options.append(InlineKeyboardButton(f"{months} мес: {monthly_payment:.2f} руб/мес", callback_data=f"months_{months}"))
-
-        markup.add(*options)
-        markup.add(InlineKeyboardButton("Отмена", callback_data="cancel"))
-        await message.reply(
-            f"Цена товара: {price} руб.\nПервоначальный взнос (30%): {initial_payment:.2f} руб.\nВыберите срок рассрочки:",
-            reply_markup=markup
-        )
-
-@dp.callback_query_handler(lambda c: c.data.startswith('months_'), state=Form.installment_terms)
-async def process_installment_choice(callback_query: types.CallbackQuery, state: FSMContext):
-    months = int(callback_query.data.split('_')[1])
-    await callback_query.answer(f'Рассрочка на  {months} мес')
-    async with state.proxy() as data:
-        price = data['cost_product']
-        initial_payment = price * 0.3
-        monthly_payment = ((price - initial_payment) * (1 + 0.05 * months)) / months
-        data['installment_choice'] = {
-            "months": months,
-            "monthly_payment": monthly_payment,
-            "initial_payment": initial_payment
-        }
-        data['installment_terms'] = f"На {months} месяцев.\nЕжемесячный платеж: {monthly_payment:.2f} руб.\nПервоначальный взнос: {initial_payment:.2f} руб."
-        data['status_check'] = 0
-    markup = InlineKeyboardMarkup()
-    markup.add(InlineKeyboardButton("Да, я согласен", callback_data="confirm"))
+    markup = InlineKeyboardMarkup(row_width=2)
+    markup.add(InlineKeyboardButton("Отправить", callback_data="confirm"))
     markup.add(InlineKeyboardButton("Отмена", callback_data="cancel"))
 
+    
     await bot.send_message(
-        callback_query.from_user.id,
-        f"Вы выбрали рассрочку на {months} месяцев.\nЕжемесячный платеж: {monthly_payment:.2f} руб.\nПервоначальный взнос: {initial_payment:.2f} руб.\nПодтверждаете?",
+        message.from_user.id,
+        f"Заявка сформирована, далее отправьте ее на рассмотрение менеджеру",
         reply_markup=markup
     )
+    # await asyncio.sleep(5)
+    # await show_installment_options(message, state)
+    
+
+# async def show_installment_options(message: types.Message, state: FSMContext):
+#     async with state.proxy() as data:
+#         price = data['cost_product']
+#         initial_payment = price * 0.3
+#         markup = InlineKeyboardMarkup(row_width=1)
+#         options = []
+
+#         for months in range(3, 13):
+#             if months == 12 and price <= 100000:
+#                 continue
+#             monthly_payment = ((price - initial_payment) * (1 + 0.05 * months)) / months
+#             options.append(InlineKeyboardButton(f"{months} мес: {monthly_payment:.2f} руб/мес", callback_data=f"months_{months}"))
+
+#         markup.add(*options)
+#         markup.add(InlineKeyboardButton("Отмена", callback_data="cancel"))
+#         await message.reply(
+#             f"Цена товара: {price} руб.\nПервоначальный взнос (30%): {initial_payment:.2f} руб.\nВыберите срок рассрочки:",
+#             reply_markup=markup
+#         )
+
+# @dp.callback_query_handler(lambda c: c.data.startswith('months_'), state=Form.installment_terms)
+# async def process_installment_choice(callback_query: types.CallbackQuery, state: FSMContext):
+#     months = int(callback_query.data.split('_')[1])
+#     await callback_query.answer(f'Рассрочка на  {months} мес')
+#     async with state.proxy() as data:
+#         price = data['cost_product']
+#         initial_payment = price * 0.3
+#         monthly_payment = ((price - initial_payment) * (1 + 0.05 * months)) / months
+#         data['installment_choice'] = {
+#             "months": months,
+#             "monthly_payment": monthly_payment,
+#             "initial_payment": initial_payment
+#         }
+#         data['installment_terms'] = f"На {months} месяцев.\nЕжемесячный платеж: {monthly_payment:.2f} руб.\nПервоначальный взнос: {initial_payment:.2f} руб."
+#         data['status_check'] = 0
+#     markup = InlineKeyboardMarkup()
+#     markup.add(InlineKeyboardButton("Да, я согласен", callback_data="confirm"))
+#     markup.add(InlineKeyboardButton("Отмена", callback_data="cancel"))
+
+#     await bot.send_message(
+#         callback_query.from_user.id,
+#         f"Вы выбрали рассрочку на {months} месяцев.\nЕжемесячный платеж: {monthly_payment:.2f} руб.\nПервоначальный взнос: {initial_payment:.2f} руб.\nПодтверждаете?",
+#         reply_markup=markup
+#     )
 
 
 
 @dp.callback_query_handler(lambda c: c.data == 'confirm', state=Form.installment_terms)
 async def process_confirm(callback_query: types.CallbackQuery, state: FSMContext):
-    await callback_query.answer(f'Готово')
+    
+    await bot.delete_message(
+        chat_id=callback_query.message.chat.id, 
+        message_id=callback_query.message.message_id)
+    
+    await callback_query.answer(f'Отправляем..')
     data = await state.get_data()
     await sq.update_profile(data, callback_query.from_user.id)
     await send_profile_to_moderation(data, ADMIN_GROUP, callback_query.bot, callback_query.from_user.id)
@@ -478,6 +528,11 @@ async def process_confirm(callback_query: types.CallbackQuery, state: FSMContext
 
 @dp.callback_query_handler(lambda c: c.data == 'cancel', state=Form.installment_terms)
 async def process_cancel(callback_query: types.CallbackQuery, state: FSMContext):
+
+    await bot.delete_message(
+        chat_id=callback_query.message.chat.id, 
+        message_id=callback_query.message.message_id)
+
     await callback_query.answer(f'Отмена заявки')
     await state.finish()
     await bot.send_message(callback_query.from_user.id, "Заявка отменена.")
