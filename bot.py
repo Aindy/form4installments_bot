@@ -51,8 +51,8 @@ class Form(StatesGroup):
     name = State()  # Ожидание ввода имени
     surname = State()  # Ожидание ввода фамилии
     middle_name = State()  # Ожидание ввода отчества (если есть)
-    city_of_registration = State()  # Ожидание ввода города прописки
-    city_of_residence = State()  # Ожидание ввода города проживания
+    # city_of_registration = State()  # Ожидание ввода города прописки
+    # city_of_residence = State()  # Ожидание ввода города проживания
     phone_number = State()  # Ожидание ввода номера телефона
     passport_scans = State()  # Ожидание загрузки сканов паспорта
     selfie_with_passport = State()  # Ожидание загрузки селфи с паспортом
@@ -66,6 +66,8 @@ class Form(StatesGroup):
     cost_product = State()  # Ожидание ввода цены товара
     installment_terms = State()  # Ожидание выбора условий рассрочки
 
+class Administrator(StatesGroup):
+    need_clear = State()
 
 @dp.message_handler(commands='get_chat_id')
 async def get_chat_id(message: types.Message):
@@ -214,32 +216,35 @@ async def process_surname(message: types.Message, state: FSMContext):
 async def process_middle_name(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
         data['middle_name'] = message.text
-    await Form.next()
+        data['city_of_registration'] = 'None'
+        data['city_of_residence'] = 'None'
+    await Form.phone_number.set()
     await message.bot.send_chat_action(message.chat.id, ChatActions.TYPING)
     await asyncio.sleep(1)
-    await message.reply("Введите ваш город прописки:")
+    # await message.reply("Введите ваш город прописки:")
+    await request_phone(message)
 
 
 # Получаем город прописки пользователя и переходим к следующему состоянию
-@dp.message_handler(state=Form.city_of_registration)
-async def process_city_of_registration(message: types.Message, state: FSMContext):
-    async with state.proxy() as data:
-        data['city_of_registration'] = message.text
-    await Form.next()
-    await message.bot.send_chat_action(message.chat.id, ChatActions.TYPING)
-    await asyncio.sleep(1)
-    await message.reply("Введите ваш город проживания:")
+# @dp.message_handler(state=Form.city_of_registration)
+# async def process_city_of_registration(message: types.Message, state: FSMContext):
+#     async with state.proxy() as data:
+#         data['city_of_registration'] = message.text
+#     await Form.next()
+#     await message.bot.send_chat_action(message.chat.id, ChatActions.TYPING)
+#     await asyncio.sleep(1)
+#     await message.reply("Введите ваш город проживания:")
 
 
 # Получаем город проживания пользователя и переходим к следующему состоянию
-@dp.message_handler(state=Form.city_of_residence)
-async def process_city_of_residence(message: types.Message, state: FSMContext):
-    async with state.proxy() as data:
-        data['city_of_residence'] = message.text
-    await Form.next()
-    await message.bot.send_chat_action(message.chat.id, ChatActions.TYPING)
-    await asyncio.sleep(1)
-    await request_phone(message)
+# @dp.message_handler(state=Form.city_of_residence)
+# async def process_city_of_residence(message: types.Message, state: FSMContext):
+#     async with state.proxy() as data:
+#         data['city_of_residence'] = message.text
+#     await Form.next()
+#     await message.bot.send_chat_action(message.chat.id, ChatActions.TYPING)
+#     await asyncio.sleep(1)
+    # await request_phone(message)
 
 
 @dp.message_handler(state=Form.phone_number)
@@ -547,8 +552,8 @@ async def send_profile_to_moderation(profile, ADMIN_GROUP, bot, user_id) -> None
     name = profile['name']
     surname = profile['surname']
     middle_name = profile['middle_name']
-    city_of_registration = profile['city_of_registration']
-    city_of_residence = profile['city_of_residence']
+    # city_of_registration = profile['city_of_registration']
+    # city_of_residence = profile['city_of_residence']
     phone_number = profile['phone_number']
     passport_scans = profile['passport_scans']
     selfie_with_passport = profile['selfie_with_passport']
@@ -567,8 +572,8 @@ async def send_profile_to_moderation(profile, ADMIN_GROUP, bot, user_id) -> None
                f"Имя: {name}\n"
                f"Фамилия: {surname}\n"
                f"Отчество: {middle_name}\n"
-               f"Город прописки: {city_of_registration}\n"
-               f"Город проживания: {city_of_residence}\n"
+            #    f"Город прописки: {city_of_registration}\n"
+            #    f"Город проживания: {city_of_residence}\n"
                f"Телефон: {phone_number}\n"
                f"Ежемесячный доход: {monthly_income}\n"
                f"Статус работы: {employment_status}\n"
@@ -612,15 +617,15 @@ async def approve_callback_handler(query: types.CallbackQuery) -> None:
         message_id=query.message.message_id,
         text="✅ Заявка одобрена"
         )
-    await bot.send_message(user_id, text='Вам одобрена рассрочка!')
+    await bot.send_message(user_id, text='Вам предусмотрена рассрочка!')
     user_data = await sq.get_status(user_id)
 
     caption = (
         f"Имя: {user_data[1]}\n"
         f"Фамилия: {user_data[2]}\n"
         f"Отчество: {user_data[3]}\n"
-        f"Город прописки: {user_data[4]}\n"
-        f"Город проживания: {user_data[5]}\n"
+        # f"Город прописки: {user_data[4]}\n"
+        # f"Город проживания: {user_data[5]}\n"
         f"Телефон: {user_data[6]}\n"
         f"Ежемесячный доход: {user_data[9]}\n"
         f"Статус работы: {user_data[10]}\n"
@@ -691,7 +696,46 @@ async def reject_callback_handler(query: types.CallbackQuery) -> None:
         message_id=query.message.message_id,
         text=" ❌ Заявка отклонена"
         )
+
+
+@dp.callback_query_handler(text_contains='need_clear')
+async def reject_callback_handler(query: types.CallbackQuery, state: FSMContext) -> None:
+    """
+    Обрабатывает команду модератора "На доработку" и отвечает пользователю
+    """
+    await Administrator.need_clear.set()
+    user_id = query.data.split(':')[1]
+    await query.answer("На доработку.")
+    await query.message.answer("Напишите комментарий заявителю:")
     
+    # Сохранение данных в состояние
+    async with state.proxy() as data:
+        data['chat_id'] = query.message.chat.id
+        data['message_id'] = query.message.message_id
+        data['user_id'] = user_id  # Сохраняем user_id для последующей отправки сообщения
+
+    await bot.edit_message_text(
+        chat_id=query.message.chat.id,
+        message_id=query.message.message_id,
+        text="⚠️ Отправлено на доработку")
+    await bot.send_message(user_id, text='Ваша заявка нуждается в доработке!')
+
+
+
+@dp.message_handler(content_types=['text'], state=Administrator.need_clear)
+async def clear_comment(message: types.Message, state: FSMContext) -> None:
+    async with state.proxy() as data:
+        user_id = data['user_id']  # Получаем user_id из состояния
+
+    comment = message.text  # Получаем комментарий от модератора
+
+    # Отправляем комментарий пользователю
+    await bot.send_message(user_id, text=f'Комментарий от модератора: {comment}\n\nВы можете заново заполнить анкету нажав /ready')
+    
+    # Завершаем состояние
+    await state.finish()
+
+
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, stream=sys.stdout)

@@ -66,11 +66,15 @@ def get_inline_keyboard(user_id) -> InlineKeyboardMarkup:
         text="Одобрить",
         callback_data=f"approve:{user_id}"
         )
+    need_clear = InlineKeyboardButton(
+        text="Доработать",
+        callback_data=f"need_clear:{user_id}"
+        )
     reject_button = InlineKeyboardButton(
         text="Отклонить",
         callback_data=f"reject:{user_id}"
         )
-    keyboard = InlineKeyboardMarkup().add(approve_button, reject_button)
+    keyboard = InlineKeyboardMarkup().add(approve_button, reject_button, need_clear)
 
     return keyboard
 
