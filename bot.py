@@ -29,7 +29,7 @@ APPROVE_GROUP = getenv("APPROVE_GROUP")
 # ADMIN_GROUP = ADMIN_GROUP.split(",") if ADMIN_GROUP else []
 SUB_GROUP = getenv("SUB_GROUP", "")
 # ADMIN_GROUP = ADMIN_GROUP.split(",") if ADMIN_GROUP else []
-LINK_TO_GROUP = 'https://t.me/+PCyo6UD0pJU1ZTRi'
+LINK_TO_GROUP = 'https://t.me/MEGA_GROUP95'
 phone_number_pattern = re.compile(r'^\+?[1-9]\d{1,14}$')
 
 bot = Bot(TOKEN)
